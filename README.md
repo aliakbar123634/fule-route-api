@@ -34,7 +34,8 @@ pip install -r requirements.txt
 
 python manage.py migrate
 python manage.py load_stations --csv data/fuel-prices-for-be-assessment.csv
-# Optional: geocode station cities for DB-backed matching
+# Required for fuel-stop optimization: geocodes ~900 station cities
+# (one-time, ~15 min; results are cached in the database)
 python manage.py populate_station_coordinates
 ```
 
