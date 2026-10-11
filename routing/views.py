@@ -1,3 +1,5 @@
+
+
 # from math import isfinite
 
 # from rest_framework.decorators import api_view
@@ -24,8 +26,8 @@
 
 # def get_verified_priced_stations(stations):
 #     """
-#     Only allow stations with an explicitly verified CSV price
-#     into the fuel-stop optimizer.
+#     Only accept stations with explicitly verified, positive prices
+#     and a valid route position.
 #     """
 #     verified_stations = []
 
@@ -33,22 +35,26 @@
 #         if station.get("price_verified") is not True:
 #             continue
 
-#         price = station.get("retail_price")
-
 #         try:
-#             price = float(price)
+#             price = float(station.get("retail_price"))
 #         except (TypeError, ValueError):
 #             continue
 
 #         if not isfinite(price) or price <= 0:
 #             continue
 
-#         if station.get("route_position_miles") is None:
+#         try:
+#             route_position = float(station.get("route_position_miles"))
+#         except (TypeError, ValueError):
+#             continue
+
+#         if not isfinite(route_position) or route_position < 0:
 #             continue
 
 #         verified_stations.append({
 #             **station,
 #             "retail_price": price,
+#             "route_position_miles": route_position,
 #         })
 
 #     return verified_stations
@@ -72,10 +78,12 @@
 #         )
 
 #     distance_miles = float(result["distance_miles"])
+#     duration_hours = float(result["duration_seconds"]) / 3600
 #     estimated_gallons = distance_miles / FUEL_ECONOMY_MPG
 
-#     # 2. Discover fuel stations near the route.
-#     # If the external station service is unavailable, preserve the route.
+#     # 2. Discover stations along the route.
+#     stations = []
+
 #     try:
 #         stations = find_stations_along_route(
 #             route_coordinates=result["geometry"]["coordinates"],
@@ -83,24 +91,40 @@
 #             sample_spacing_miles=50,
 #             search_radius_miles=10,
 #         )
-#     except (StationLocationError, TimeoutError, OSError):
+
+#         if stations is None:
+#             stations = []
+
+#         print(
+#             f"[Station Discovery] Found {len(stations)} stations "
+#             f"for route: {start} -> {destination}"
+#         )
+
+#     except (StationLocationError, TimeoutError, OSError) as exc:
+#         print(
+#             f"[Station Discovery Error] "
+#             f"{type(exc).__name__}: {exc}"
+#         )
 #         stations = []
 
-#     # 3. Only verified CSV prices can be used for optimization.
-#     # The current station matching workflow has not verified prices yet.
+#     # 3. Do not trust unverified CSV prices.
 #     priced_stations = get_verified_priced_stations(stations)
 
 #     fuel_stops = []
 #     estimated_fuel_cost = None
+
 #     fuel_status = "prices_not_verified"
 #     fuel_message = (
-#         "Fuel stations were discovered, but their CSV prices have not "
-#         "been verified. No cheapest-stop or fuel-cost estimate is claimed."
+#         "Route calculated successfully. Station candidates are returned "
+#         "when discovery succeeds, but CSV prices must be verified before "
+#         "fuel-cost optimization."
 #     )
 
-#     # 4. Optimize only when at least one verified, priced candidate exists.
+#     # 4. Optimize only with verified prices.
 #     if priced_stations:
-#         from routing.services.fuel_stop_service import select_fuel_stops
+#         from routing.services.fuel_stop_service import (
+#             select_fuel_stops,
+#         )
 
 #         try:
 #             optimization = select_fuel_stops(
@@ -111,33 +135,46 @@
 #             )
 
 #             fuel_stops = optimization.get("stops", [])
-#             estimated_fuel_cost = optimization.get("estimated_fuel_cost")
+#             estimated_fuel_cost = optimization.get(
+#                 "estimated_fuel_cost"
+#             )
+
 #             fuel_status = "optimized_with_verified_prices"
 #             fuel_message = (
-#                 "Fuel-stop optimization used stations with verified prices."
+#                 "Fuel-stop optimization used explicitly verified "
+#                 "station prices."
 #             )
 
-#         except ValueError:
+#         except ValueError as exc:
+#             print(f"[Fuel Optimization Error] {exc}")
+
 #             fuel_status = "no_feasible_verified_station_route"
 #             fuel_message = (
-#                 "No feasible fuel-stop route could be calculated using "
-#                 "the currently verified stations."
+#                 "No feasible fuel-stop route was found using the "
+#                 "currently verified stations."
 #             )
 
-#     # 5. Return route, station candidates and fuel-estimate status.
+#     elif not stations:
+#         fuel_status = "station_discovery_failed_or_empty"
+#         fuel_message = (
+#             "The route was calculated, but station discovery returned "
+#             "no stations. Check the Django server terminal for "
+#             "the Station Discovery log."
+#         )
+
+#     # 5. Return route and diagnostic information.
 #     return Response(
 #         {
 #             "start": result["start"],
 #             "destination": result["destination"],
 #             "total_distance_miles": round(distance_miles, 2),
-#             "estimated_duration_hours": round(
-#                 result["duration_seconds"] / 3600,
-#                 2,
-#             ),
+#             "estimated_duration_hours": round(duration_hours, 2),
 #             "fuel_requirements": {
 #                 "vehicle_max_range_miles": VEHICLE_MAX_RANGE_MILES,
 #                 "fuel_economy_mpg": FUEL_ECONOMY_MPG,
-#                 "estimated_trip_gallons": round(estimated_gallons, 2),
+#                 "estimated_trip_gallons": round(
+#                     estimated_gallons, 2
+#                 ),
 #                 "intermediate_stops_required_by_range": (
 #                     distance_miles > VEHICLE_MAX_RANGE_MILES
 #                 ),
@@ -146,8 +183,8 @@
 #                 "estimated_fuel_cost": estimated_fuel_cost,
 #                 "cost_currency": "USD",
 #                 "cost_scope": (
-#                     "Intermediate refueling only; initial tank cost is "
-#                     "not included by the current optimizer."
+#                     "Intermediate refueling only; initial tank cost "
+#                     "is not included by the current optimizer."
 #                 ),
 #             },
 #             "fuel_stops": fuel_stops,
@@ -158,12 +195,6 @@
 #         },
 #         status=status.HTTP_200_OK,
 #     )
-
-
-
-
-
-
 
 
 

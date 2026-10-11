@@ -1,4 +1,8 @@
 
+
+
+# from unittest.mock import patch
+
 # from django.test import SimpleTestCase
 
 # from routing.services.fuel_stop_service import (
@@ -6,6 +10,9 @@
 #     calculate_fuel_needed,
 #     filter_stations_near_route,
 #     select_fuel_stops,
+# )
+# from routing.services.route_station_service import (
+#     find_stations_along_route,
 # )
 
 
@@ -16,6 +23,7 @@
 #             32.7767, -96.7970,
 #             32.7767, -96.7970,
 #         )
+
 #         self.assertEqual(distance, 0)
 
 #     def test_calculate_fuel_needed(self):
@@ -80,17 +88,6 @@
 #         )
 
 
-
-
-# from unittest.mock import patch
-
-# from django.test import SimpleTestCase
-
-# from routing.services.route_station_service import (
-#     find_stations_along_route,
-# )
-
-
 # class RouteStationServiceTests(SimpleTestCase):
 
 #     @patch(
@@ -133,8 +130,6 @@
 #         self.assertEqual(len(result), 1)
 #         self.assertEqual(result[0]["osm_id"], 101)
 #         self.assertEqual(mock_nearby.call_count, 2)
-#         # mock_nearby.assert_called_once()
-
 
 #     def test_route_with_no_intermediate_stop_returns_no_stops(self):
 #         result = select_fuel_stops(
@@ -145,18 +140,17 @@
 #         self.assertEqual(result["stops"], [])
 #         self.assertEqual(result["estimated_fuel_cost"], 0.0)
 
+#     def test_long_route_without_stations_is_reported_as_infeasible(self):
+#         with self.assertRaisesRegex(
+#             ValueError,
+#             "No feasible fuel-stop route found",
+#         ):
+#             select_fuel_stops(
+#                 route_distance_miles=1200,
+#                 candidate_stations=[],
+#             )
 
-
-#     def test_returns_no_stops_when_no_station_is_available_for_long_route(self):
-#         result = select_fuel_stops(
-#             route_distance_miles=1200,
-#             candidate_stations=[],
-#         )
-
-#         self.assertEqual(result["stops"], [])
-#         self.assertFalse(result["is_route_feasible"])
-
-#     def test_does_not_select_station_beyond_destination(self):
+#     def test_station_beyond_destination_does_not_make_route_feasible(self):
 #         stations = [
 #             {
 #                 "name": "Beyond Destination",
@@ -165,15 +159,14 @@
 #             },
 #         ]
 
-#         result = select_fuel_stops(
-#             route_distance_miles=700,
-#             candidate_stations=stations,
-#         )
-
-#         self.assertEqual(result["stops"], [])
-#         self.assertFalse(result["is_route_feasible"])
-
-
+#         with self.assertRaisesRegex(
+#             ValueError,
+#             "No feasible fuel-stop route found",
+#         ):
+#             select_fuel_stops(
+#                 route_distance_miles=700,
+#                 candidate_stations=stations,
+#             )
 
 
 
