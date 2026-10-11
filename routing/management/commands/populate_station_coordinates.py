@@ -1,8 +1,10 @@
+
+
 from django.core.management.base import BaseCommand
 
 from routing.models import Station
 from routing.services.geocoding_service import (
-    get_coordinates,
+    get_coordinates_with_retry,
     GeocodingError,
 )
 
@@ -42,7 +44,9 @@ class Command(BaseCommand):
             query = f"{city}, {state}"
 
             try:
-                latitude, longitude = get_coordinates(query)
+                # Retries transient Nominatim failures (rate limits,
+                # timeouts) with exponential backoff.
+                latitude, longitude = get_coordinates_with_retry(query)
             except (GeocodingError, ValueError) as exc:
                 failed += 1
                 self.stdout.write(f"  SKIP {query}: {exc}")

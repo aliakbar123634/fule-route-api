@@ -1,4 +1,5 @@
 
+
 import time
 
 import requests
@@ -17,6 +18,47 @@ _last_request_time = 0.0
 
 class GeocodingError(Exception):
     """Raised when a location cannot be geocoded."""
+
+
+# A "no result" answer is permanent for that query; everything else
+# (HTTP errors, timeouts, connection drops, rate-limit blocks) is
+# treated as transient and worth retrying.
+_PERMANENT_FAILURE_MARKER = "No US location found"
+
+
+def get_coordinates_with_retry(
+    query,
+    max_attempts=5,
+    base_delay_seconds=2.0,
+    max_delay_seconds=60.0,
+):
+    """
+    Geocode a query, retrying transient failures with exponential backoff.
+
+    Raises GeocodingError if every attempt fails. Queries that Nominatim
+    answers with "no result" are not retried.
+    """
+    last_error = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return get_coordinates(query)
+        except GeocodingError as exc:
+            last_error = exc
+
+            if _PERMANENT_FAILURE_MARKER in str(exc):
+                raise
+
+            if attempt == max_attempts:
+                break
+
+            delay = min(
+                base_delay_seconds * (2 ** (attempt - 1)),
+                max_delay_seconds,
+            )
+            time.sleep(delay)
+
+    raise last_error
 
 
 def get_coordinates(location):
